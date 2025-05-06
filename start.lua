@@ -657,18 +657,86 @@ function draw_net()
     write_line_by_line(S.net.list.x, S.net.list.y, 20, inf, main_text_color, 14)
 end
 
-
 function draw_battery()
     if not has_battery then return end
     if not initialized_battery and tonumber(updates()) > startup_delay + 6  then
         init_battery()
     end
     local bat = battery_percent()
-    ring_anticlockwise(S.battery.x, S.battery.y, S.battery.radius, S.battery.width , S.battery.begin, S.battery.end_, bat, 100, color_frompercent_reverse(tonumber(bat)))
+    local bat_time = "N/A"
+    local formatted_time = "N/A"
+
+    --Use system commands to obtain battery time (improve update speed)
+    if battery1_index ~= nil then
+        --Get battery information using acpi command
+        local file = io.popen("acpi -b")
+        if file then
+            local acpi_output = file:read("*a")
+            file:close()
+
+            --Extract the time during discharge and shape it into HMS format
+            if acpi_output:match("Discharging") then
+                bat_time = acpi_output:match("(%d+:%d+:%d+)") or "Calculating..."
+
+                --Convert to HH:MM:SS format
+                if bat_time:match("%d+:%d+:%d+") then
+                    local h, m, s = bat_time:match("(%d+):(%d+):(%d+)")
+                    if h and m and s then
+                        formatted_time = h .. "h " .. m .. "m " .. s .. "s"
+                    else
+                        formatted_time = bat_time
+                    end
+                else
+                    formatted_time = bat_time
+                end
+            else
+                bat_time = "Charging"
+                --Extract the time until charging is complete
+                local charging_time = acpi_output:match("(%d+:%d+:%d+)")
+                if charging_time then
+                    --Convert to HH:MM:SS format
+                    local h, m, s = charging_time:match("(%d+):(%d+):(%d+)")
+                    if h and m and s then
+                        formatted_time = "Charging (" .. h .. "h " .. m .. "m " .. s .. "s until complete)"
+                    else
+                        formatted_time = "Charging (" .. charging_time .. " until complete)"
+                    end
+                else
+                    formatted_time = bat_time
+                end
+            end
+        else
+            -- Get conky values if acpi command is not available
+            bat_time = parse("battery_time BAT" .. battery1_index)
+            if bat_time == "" then
+                if discharging_battery() then
+                    formatted_time = "Calculating..."
+                else
+                    formatted_time = "Charging until complete"
+                end
+            else
+                -- Convert conky time format as well
+                if bat_time:match("%d+:%d+") then
+                    local h, m = bat_time:match("(%d+):(%d+)")
+                    if h and m then
+                        formatted_time = h .. "h " .. m .. "m"
+                    else
+                        formatted_time = bat_time
+                    end
+                else
+                    formatted_time = bat_time
+                end
+            end
+        end
+    end
+
+    ring_anticlockwise(S.battery.x, S.battery.y, S.battery.radius, S.battery.width, S.battery.begin, S.battery.end_, bat, 100, color_frompercent_reverse(tonumber(bat)))
     write(S.battery.text.perc.x, S.battery.text.perc.y, bat .. "%", 15, main_text_color)
     write(S.battery.text.title.x, S.battery.text.title.y, "Battery", 15, main_text_color)
-end
 
+    -- Battery usage time display (HMS format)
+    write(S.battery.text.title.x, S.battery.text.title.y + 25, "Remaining time: " .. formatted_time, 15, main_text_color)
+end
 
 function draw_titles()
     if not to_draw_titles then return end
