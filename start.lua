@@ -529,6 +529,7 @@ function start()
     draw_battery()
     draw_titles()
     draw_net()
+    draw_brightness_volume()
 end
 
 
@@ -606,25 +607,33 @@ function draw_clock()
     write(S.clock.ut.x, S.clock.ut.y, "Uptime: " .. uptime(), 14, main_text_color)
 end
 
-
 function draw_disks()
     local rt = fs_used_perc("/")
     local hm = fs_used_perc("/home")
+    local hdd = fs_used_perc("")  --Change as needed
     local rt_text = string.format("Root: %s / %s (%s)", fs_used("/"), fs_size("/"), fs_free("/"))
     local hm_text = string.format("Home: %s / %s (%s)", fs_used("/home"), fs_size("/home"), fs_free("/home"))
+    local hdd_text = string.format("HDD:  %s / %s (%s)", fs_used(""), fs_size(""), fs_free(""))  --Change as needed
 
+    --Root partition ring
     ring_anticlockwise(S.disk.x, S.disk.y, S.disk.radius, S.disk.thickness, S.disk.begin_angle, S.disk.end_angle, rt, 100, color_frompercent(tonumber(rt)))
+
+    --Home partition ring (reduce radius)
     ring_anticlockwise(S.disk.x, S.disk.y, S.disk.radius-22, S.disk.thickness, S.disk.begin_angle, S.disk.end_angle, hm, 100, color_frompercent(tonumber(hm)))
 
-    write(S.disk.x+45, S.disk.y-S.disk.radius+10, rt_text, 14, main_text_color)
-    write(S.disk.x+40, S.disk.y-S.disk.radius+35, hm_text, 14, main_text_color)
+    --HDD partition ring (also smaller radius)
+    ring_anticlockwise(S.disk.x, S.disk.y, S.disk.radius-44, S.disk.thickness, S.disk.begin_angle, S.disk.end_angle, hdd, 100, color_frompercent(tonumber(hdd)))
+
+    --Adjust the text display position
+    write(S.disk.x+50, S.disk.y-S.disk.radius+10, rt_text, 14, main_text_color)
+    write(S.disk.x+50, S.disk.y-S.disk.radius+35, hm_text, 14, main_text_color)
+    write(S.disk.x+50, S.disk.y-S.disk.radius+60, hdd_text, 14, main_text_color)  --Change as needed
 
     local dsk_info = {
         "Read:  " .. diskio_read(""),
         "Write: " .. diskio_write(""),
     }
     write_line_by_line(S.disk.x-40, S.disk.y-10, 20, dsk_info, main_text_color, 14)
-
 end
 
 
@@ -747,7 +756,6 @@ function draw_titles()
 end
 
 
-
 function conky_main()
     if conky_window == nil then
         return
@@ -773,3 +781,61 @@ function conky_main()
     cr = nil
 end
 
+--Auxiliary function for drawing rounded rectangles
+function rounded_rectangle(x, y, width, height, radius)
+    --Drawing rounded rectangles
+    cairo_new_path(cr)
+    cairo_arc(cr, x + radius, y + radius, radius, math.pi, 3 * math.pi / 2)
+    cairo_arc(cr, x + width - radius, y + radius, radius, 3 * math.pi / 2, 0)
+    cairo_arc(cr, x + width - radius, y + height - radius, radius, 0, math.pi / 2)
+    cairo_arc(cr, x + radius, y + height - radius, radius, math.pi / 2, math.pi)
+    cairo_close_path(cr)
+end
+
+function draw_brightness_volume()
+    local brightness = get_brightness()
+    local volume = get_volume()
+    local muted = is_muted()
+
+    --Change debug information to bar display
+    local debug_x = 1350
+    local debug_y = 50
+    local debug_width = 200
+    local debug_height = 20
+    local debug_spacing = 35
+
+    --Section title
+    write(debug_x - 100, debug_y - 20, "System Controls", 16, main_text_color)
+
+    --Brightness debug display (bar format)
+    cairo_set_source_rgba(cr, 0.3, 0.3, 0.3, 0.6)
+    rounded_rectangle(debug_x, debug_y, debug_width, debug_height, 3)
+    cairo_fill(cr)
+
+    if brightness > 0 then
+        cairo_set_source_rgba(cr, 1, 0.7, 0, 0.8) --Orange
+        rounded_rectangle(debug_x, debug_y, math.max(3, debug_width * brightness / 100), debug_height, 3)
+        cairo_fill(cr)
+    end
+
+    --Brightness text
+    write(debug_x - 100, debug_y + debug_height/2 + 6, "Brightness", 15, main_text_color)
+    write(debug_x + debug_width + 10, debug_y + debug_height/2 + 6, brightness .. "%", 15, main_text_color)
+
+    --Volume debugging display (bar format)
+    cairo_set_source_rgba(cr, 0.3, 0.3, 0.3, 0.6)
+    rounded_rectangle(debug_x, debug_y + debug_spacing, debug_width, debug_height, 3)
+    cairo_fill(cr)
+
+    if not muted and volume > 0 then
+        local vol_debug_color = {0.3, 0.7, 1} --Cyan
+        cairo_set_source_rgba(cr, vol_debug_color[1], vol_debug_color[2], vol_debug_color[3], 0.8)
+        rounded_rectangle(debug_x, debug_y + debug_spacing, math.max(3, debug_width * volume / 100), debug_height, 3)
+        cairo_fill(cr)
+    end
+
+    --Volume text
+    write(debug_x - 100, debug_y + debug_spacing + debug_height/2 + 6, "Volume", 15, main_text_color)
+    write(debug_x + debug_width + 10, debug_y + debug_spacing + debug_height/2 + 6,
+        volume .. "% " .. (muted and "(Muted)" or ""), 15, main_text_color)
+end

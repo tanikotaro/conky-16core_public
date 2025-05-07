@@ -435,3 +435,166 @@ function init_battery()
     end
 end
 
+--Function to get screen brightness
+function get_brightness()
+    --Try multiple ways to get it
+    local methods = {
+        --Using xbacklight
+        function()
+            local file = io.popen("xbacklight -get 2>/dev/null")
+            if not file then return nil end
+            local brightness = file:read("*a")
+            file:close()
+            return tonumber(string.match(brightness, "%d+"))
+        end,
+
+        --Uses sysfs (for single devices)
+        function()
+            local file = io.popen("ls /sys/class/backlight/ 2>/dev/null | head -n 1")
+            if not file then return nil end
+            local device = file:read("*a"):gsub("%s+$", "")
+            file:close()
+
+            if device and device ~= "" then
+                file = io.popen("cat /sys/class/backlight/" .. device .. "/brightness 2>/dev/null")
+                if not file then return nil end
+                local current = file:read("*a")
+                file:close()
+
+                file = io.popen("cat /sys/class/backlight/" .. device .. "/max_brightness 2>/dev/null")
+                if not file then return nil end
+                local max = file:read("*a")
+                file:close()
+
+                current = tonumber(current) or 0
+                max = tonumber(max) or 100
+                if max > 0 then
+                    return math.floor((current / max) * 100)
+                end
+            end
+            return nil
+        end,
+
+        --Use Light-util (another backlight control tool)
+        function()
+            local file = io.popen("light -G 2>/dev/null")
+            if not file then return nil end
+            local brightness = file:read("*a")
+            file:close()
+            return tonumber(string.match(brightness, "%d+"))
+        end,
+
+        --Use brightnessctl
+        function()
+            local file = io.popen("brightnessctl get 2>/dev/null")
+            if not file then return nil end
+            local current = file:read("*a")
+            file:close()
+
+            file = io.popen("brightnessctl max 2>/dev/null")
+            if not file then return nil end
+            local max = file:read("*a")
+            file:close()
+
+            current = tonumber(current) or 0
+            max = tonumber(max) or 100
+            if max > 0 then
+                return math.floor((current / max) * 100)
+            end
+            return nil
+        end
+    }
+
+    --Try each method in order
+    for _, method in ipairs(methods) do
+        local result = method()
+        if result and result >= 0 then
+            return result
+        end
+    end
+
+    -- デバッグメッセージ
+    print("Unable to obtain brightness information")
+    return 0
+end
+
+--Function to get the system volume (earphone compatible version)
+function get_volume()
+    --Try multiple ways to get it
+    local methods = {
+        --Check all audio devices with pactl list sinks
+        function()
+            local file = io.popen("pactl list sinks | grep -A 15 'RUNNING\\|IDLE' | grep Volume: | head -n 1 | awk '{print $5}' | tr -d '%'")
+            if not file then return nil end
+            local volume = file:read("*a")
+            file:close()
+            return tonumber(string.match(volume, "%d+"))
+        end,
+
+        --Search for currently active devices in amixer
+        function()
+            local file = io.popen("amixer -D pulse get Master | grep 'Front Left:' | awk -F'[][]' '{print $2}' | tr -d '%'")
+            if not file then return nil end
+            local volume = file:read("*a")
+            file:close()
+            return tonumber(string.match(volume, "%d+"))
+        end,
+
+        --pactl list sinks short version
+        function()
+            local file = io.popen("pactl get-sink-volume @DEFAULT_SINK@ | head -n 1 | awk '{print $5}' | tr -d '%'")
+            if not file then return nil end
+            local volume = file:read("*a")
+            file:close()
+            return tonumber(string.match(volume, "%d+"))
+        end
+    }
+
+    --Try each method in order
+    for _, method in ipairs(methods) do
+        local result = method()
+        if result and result >= 0 then
+            return result
+        end
+    end
+
+    --Debug Message
+    print("Could not retrieve volume information")
+    return 0
+end
+
+--Function to get mute status (earphone compatible version)
+function is_muted()
+    --Try multiple ways to get it
+    local methods = {
+        --Check current default device with pulse audio
+        function()
+            local file = io.popen("pactl list sinks | grep -A 15 'RUNNING\\|IDLE' | grep Mute: | head -n 1")
+            if not file then return nil end
+            local result = file:read("*a")
+            file:close()
+            return string.match(result, "yes") ~= nil
+        end,
+
+        --Check default devices with amixer
+        function()
+            local file = io.popen("amixer -D pulse get Master | grep 'Front Left:' | grep '\\[off\\]'")
+            if not file then return nil end
+            local result = file:read("*a")
+            file:close()
+            return result ~= ""
+        end
+    }
+
+    --Try each method in order
+    for _, method in ipairs(methods) do
+        local result = method()
+        if result ~= nil then
+            return result
+        end
+    end
+
+    --Debug Message
+    print("Unable to obtain mute status")
+    return false
+end
