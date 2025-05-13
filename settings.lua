@@ -34,7 +34,7 @@ EDIT THIS to match your network interface.
 You can find out by executing `ifconfig` or `ip link`.
 It might be "wlan0", "eth0", "wlp3s0" or something else
 ]]
-net_interface = "wlan0"
+net_interface = "wlo1"   -- network interface name
 
 --[[
 this depends on your own internet speed
@@ -46,7 +46,7 @@ upload_rate_maximum   = 1000     -- kb
 Default font used by the convinient functions like write() and write_bold()
 You can use _write() to choose another font
 ]]
-main_font = "Mono"
+main_font = "Mono"   -- font name
 
 --[[
 the public ip is fetched from the internet.
@@ -57,7 +57,7 @@ which is called every `public_ip_refresh_rate` secondes
 WARNING: this feature exploits third party services,
 therefore we cannot garantee your privacy if you turn it on
 ]]
-use_public_ip = false
+use_public_ip = true
 public_ip_refresh_rate = 60     -- secondes
 
 ----------------------------------------------

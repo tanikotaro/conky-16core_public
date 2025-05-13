@@ -212,9 +212,18 @@ function color_frompercent_reverse(percent)
 end
 
 
+-- function color_convert(colour, alpha)
+--     -- input hexadecimal color code, returns its corresponding RGB+Alpha representation
+-- 	return ((colour / 0x10000) % 0x100) / 255., ((colour / 0x100) % 0x100) / 255., (colour % 0x100) / 255., alpha
+-- end
+
 function color_convert(colour, alpha)
-    -- input hexadecimal color code, returns its corresponding RGB+Alpha representation
-	return ((colour / 0x10000) % 0x100) / 255., ((colour / 0x100) % 0x100) / 255., (colour % 0x100) / 255., alpha
+    -- テーブル（RGB形式）の場合はそのまま返す
+    if type(colour) == "table" then
+        return colour[1], colour[2], colour[3], alpha
+    end
+    -- 16進数の場合は従来通り変換
+    return ((colour / 0x10000) % 0x100) / 255., ((colour / 0x100) % 0x100) / 255., (colour % 0x100) / 255., alpha
 end
 
 
@@ -313,7 +322,7 @@ function fs_free(fs)
 end
 
 
-public_ip = nil     -- variable that will hold the IP adress
+public_ip = ""     -- variable that will hold the IP adress     -- Todo git push 時に注意！
 function get_public_ip() return public_ip end
 function set_public_ip(ip)
     if not ip then public_ip = "No Address"
@@ -597,4 +606,67 @@ function is_muted()
     --Debug Message
     print("Unable to obtain mute status")
     return false
+end
+
+-- Function to read a value from a sysfs file
+function read_sysfs_value(path)
+    local file = io.open(path, "r")
+    if not file then return nil end
+    local value = file:read("*a")
+    file:close()
+    if value then
+        return tonumber(value:match("^%s*(.-)%s*$")) -- Trim whitespace and convert to number
+    end
+    return nil
+end
+
+-- Get battery design capacity in mWh or mAh
+function battery_capacity_design(battery_name)
+    battery_name = battery_name or "BAT0" -- Default to BAT0
+    local energy_path = "/sys/class/power_supply/" .. battery_name .. "/energy_full_design"
+    local charge_path = "/sys/class/power_supply/" .. battery_name .. "/charge_full_design"
+    local capacity_uah_path = "/sys/class/power_supply/" .. battery_name .. "/capacity" -- Some systems might use this for uAh
+
+    local energy = read_sysfs_value(energy_path)
+    if energy then return energy / 1000, "mWh" end -- Typically in uWh, convert to mWh
+
+    local charge = read_sysfs_value(charge_path)
+    if charge then return charge / 1000, "mAh" end -- Typically in uAh, convert to mAh
+
+    -- Fallback for some systems that might report capacity in uAh directly in 'capacity'
+    -- This is less common for design capacity but worth a check if others fail.
+    -- Note: 'capacity' usually gives percentage. This is a specific case.
+    -- For actual current capacity, we'd use energy_now or charge_now.
+
+    return nil, "N/A"
+end
+
+-- Get battery current full charge capacity in mWh or mAh
+function battery_capacity_full(battery_name)
+    battery_name = battery_name or "BAT0" -- Default to BAT0
+    local energy_path = "/sys/class/power_supply/" .. battery_name .. "/energy_full"
+    local charge_path = "/sys/class/power_supply/" .. battery_name .. "/charge_full"
+
+    local energy = read_sysfs_value(energy_path)
+    if energy then return energy / 1000, "mWh" end
+
+    local charge = read_sysfs_value(charge_path)
+    if charge then return charge / 1000, "mAh" end
+
+    return nil, "N/A"
+end
+
+-- Get current battery capacity in mWh or mAh
+function battery_capacity_now(battery_name)
+    battery_name = battery_name or "BAT0" -- Default to BAT0
+    local energy_path = "/sys/class/power_supply/" .. battery_name .. "/energy_now"
+    local charge_path = "/sys/class/power_supply/" .. battery_name .. "/charge_now"
+
+    local energy = read_sysfs_value(energy_path)
+    if energy then return energy / 1000, "mWh" end
+
+    local charge = read_sysfs_value(charge_path)
+    if charge then return charge / 1000, "mAh" end
+
+    return nil, "N/A"
 end
