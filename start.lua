@@ -662,13 +662,66 @@ function draw_disks()
     write(S.disk.x+50, S.disk.y-S.disk.radius+32.5, hm_text, 14, main_text_color)
     write(S.disk.x+50, S.disk.y-S.disk.radius+55, hdd_text, 14, main_text_color)  --Change as needed
 
-    local dsk_info = {
-        "Read:  " .. diskio_read(""),
-        "Write: " .. diskio_write(""),
-    }
-    write_line_by_line(S.disk.x-40, S.disk.y-10, 20, dsk_info, main_text_color, 14)
-end
+    -- ディスクI/O情報を取得
+    local disk_read = diskio_read("")
+    local disk_write = diskio_write("")
 
+    -- 読み書き速度の数値部分を抽出
+    local read_speed = tonumber(string.match(disk_read, "([%d%.]+)")) or 0
+    local write_speed = tonumber(string.match(disk_write, "([%d%.]+)")) or 0
+
+    -- 読み書き状態のLEDインジケーター用のパラメータ
+    local led_radius = 8
+    local led_x = S.disk.x + 80
+    local read_led_y = S.disk.y - 25
+    local write_led_y = S.disk.y - 5
+    local blink_interval = 2 -- 点滅間隔（更新回数）
+
+    -- 読み込みLED（青色）
+    -- 読み込みがある場合は点滅、ない場合は常時点灯
+    local read_active = read_speed > 0
+    local read_blink_on = read_active and (math.floor(updates() / blink_interval) % 2 == 0)
+    local read_color = {0.2, 0.6, 1, read_active and (read_blink_on and 1 or 0.3) or 0.7}
+
+    -- 書き込みLED（赤色）
+    -- 書き込みがある場合は点滅、ない場合は常時点灯
+    local write_active = write_speed > 0
+    local write_blink_on = write_active and (math.floor(updates() / blink_interval) % 2 == 0)
+    local write_color = {1, 0.3, 0.2, write_active and (write_blink_on and 1 or 0.3) or 0.7}
+
+    -- 読み込みLED
+    cairo_set_source_rgba(cr, read_color[1], read_color[2], read_color[3], read_color[4])
+    cairo_arc(cr, led_x, read_led_y, led_radius, 0, 2 * math.pi)
+    cairo_fill(cr)
+
+    -- LED外枠
+    cairo_set_source_rgba(cr, 0.6, 0.6, 0.6, 0.8)
+    cairo_set_line_width(cr, 1)
+    cairo_arc(cr, led_x, read_led_y, led_radius, 0, 2 * math.pi)
+    cairo_stroke(cr)
+
+    -- 書き込みLED
+    cairo_set_source_rgba(cr, write_color[1], write_color[2], write_color[3], write_color[4])
+    cairo_arc(cr, led_x, write_led_y, led_radius, 0, 2 * math.pi)
+    cairo_fill(cr)
+
+    -- LED外枠
+    cairo_set_source_rgba(cr, 0.6, 0.6, 0.6, 0.8)
+    cairo_set_line_width(cr, 1)
+    cairo_arc(cr, led_x, write_led_y, led_radius, 0, 2 * math.pi)
+    cairo_stroke(cr)
+
+    -- LEDのラベルを表示
+    write(led_x + 15, read_led_y + 5, "Read", 14, main_text_color)
+    write(led_x + 15, write_led_y + 5, "Write", 14, main_text_color)
+
+    -- 読み書き情報の表示（既存のコード）
+    local dsk_info = {
+        "Read:  " .. disk_read,
+        "Write: " .. disk_write,
+    }
+    write_line_by_line(S.disk.x-40, S.disk.y-20, 20, dsk_info, main_text_color, 14)
+end
 
 function draw_net()
     ring_clockwise(S.net.x, S.net.y, S.net.radius-18, 15, S.net.begin_angle, S.net.end_angle, download_speed_kb(), download_rate_maximum, main_fg)
@@ -980,7 +1033,7 @@ end
 
 -- 天気予報の設定
 local weather_config = {
-    api_key = "YOUR_API_KEY", -- OpenWeatherMapのAPIキーに置き換えてください    -- Todo git push時に注意！
+    api_key = nil, -- Please replace it with your OpenWeatherMap API key    -- Todo git push時に注意！
     city_id = nil, -- 都市ID
     -- https://qiita.com/shyu61/items/f469eb400b1c8cd84812
     units = "metric", -- 単位系（metric=摂氏、imperial=華氏）
@@ -1010,7 +1063,7 @@ local weather_icons = {
     ["13n"] = "*", -- 雪
     ["50d"] = "≈", -- 霧
     ["50n"] = "≈", -- 霧
-    ["unknown"] = "?" -- 不明
+    ["Unknown"] = "?" -- 不明
 }
 
 -- 天気データを取得する関数
@@ -1086,9 +1139,10 @@ function draw_weather()
           icon .. " " .. (weather.description or "No information"), 15, main_text_color)
 
     -- 気温リング（-20°C〜45°C の範囲を想定）
+    local temp_color = {}
     if weather.temp then
         -- 温度に応じた色を計算
-        local temp_color = {}
+
         if weather.temp < 0 then
             -- 低温（青）desc
             temp_color = {0.2, 0.4, 1}
@@ -1129,38 +1183,90 @@ function draw_weather()
         -- 体感温度リング描画
         ring_clockwise(S.weather.x, S.weather.y, S.weather.radius + 20, S.weather.thickness,
                       S.weather.begin_angle, S.weather.end_angle,
-                      feels_normalized, 100, main_text_color)
+                      feels_normalized, 100, temp_color)
 
         -- 体感温度テキスト
         write(S.weather.text.feels.x, S.weather.text.feels.y,
-              string.format("Effective  : %.1f°C", weather.feels_like), 14, main_text_color)
+              string.format("Effective  : %.1f°C", weather.feels_like), 14, temp_color)
     end
 
-    -- 湿度リング
     if weather.humidity then
+        -- 湿度に応じた色を計算
+        local humidity_color = {}
+        if weather.humidity < 20 then
+            -- とても乾燥（薄い茶色・ベージュ）
+            humidity_color = {0.9, 0.8, 0.6}
+        elseif weather.humidity < 40 then
+            -- 乾燥気味（黄土色・淡いオレンジ）
+            humidity_color = {0.9, 0.6, 0.3}
+        elseif weather.humidity < 60 then
+            -- 快適ゾーン（水色・明るい青）
+            humidity_color = {0.4, 0.7, 1.0}
+        elseif weather.humidity < 80 then
+            -- 少し湿っぽく（青緑・緑がかった青）
+            humidity_color = {0.2, 0.6, 0.7}
+        else
+            -- 蒸し蒸し・ジメジメ（濃い青〜紺・グレー）
+            humidity_color = {0.1, 0.2, 0.5}
+        end
+
         -- 湿度リング描画
         ring_clockwise(S.weather.x, S.weather.y, S.weather.radius - 20, S.weather.thickness,
-                      S.weather.begin_angle, S.weather.end_angle,
-                      weather.humidity, 100, main_text_color)
+                        S.weather.begin_angle, S.weather.end_angle,
+                        weather.humidity, 100, humidity_color)
 
         -- 湿度テキスト
         write(S.weather.text.humidity.x, S.weather.text.humidity.y,
-              string.format("Humidity   : %d%%", weather.humidity), 14, main_text_color)
+                string.format("Humidity   : %d%%", weather.humidity), 14, humidity_color)
     end
 
-    -- 風速リング（0〜20 m/s を想定）
+    -- 風速リング（0〜30 m/s を想定）
     if weather.wind_speed then
-        -- 風速を正規化（0〜20 m/s → 0〜100%）
-        local wind_normalized = math.min(weather.wind_speed / 20 * 100, 100)
+        -- 風速に応じた色を計算
+        local wind_color = {}
+        local wind_status = ""
+
+        if weather.wind_speed < 2 then
+            -- ほぼ無風・そよ風（薄い水色・青白）
+            wind_color = {0.7, 0.9, 1.0}
+            wind_status = " (Calm)"
+        elseif weather.wind_speed < 5 then
+            -- 穏やかな風、心地よい（水色）
+            wind_color = {0.4, 0.8, 1.0}
+            wind_status = " (Gentle)"
+        elseif weather.wind_speed < 10 then
+            -- 風を感じる、洗濯物が揺れる（青）
+            wind_color = {0.2, 0.5, 0.9}
+            wind_status = " (Moderate)"
+        elseif weather.wind_speed < 15 then
+            -- 強めの風、帽子飛ぶかも（緑青・エメラルド）
+            wind_color = {0.0, 0.7, 0.6}
+            wind_status = " (Fresh)"
+        elseif weather.wind_speed < 20 then
+            -- 強風、体を持っていかれそう（オレンジ）
+            wind_color = {1.0, 0.6, 0.0}
+            wind_status = " (Strong)"
+        elseif weather.wind_speed < 25 then
+            -- 非常に強い風、注意が必要（赤）
+            wind_color = {0.9, 0.2, 0.2}
+            wind_status = " (Very Strong)"
+        else
+            -- 危険レベル、暴風・台風並み（濃赤・紫・黒に近い色）
+            wind_color = {0.6, 0.0, 0.4}
+            wind_status = " (Storm/Typhoon)"
+        end
+
+        -- 風速を正規化（0〜30 m/s → 0〜100%）
+        local wind_normalized = math.min(weather.wind_speed / 30 * 100, 100)
 
         -- 風速リング描画
         ring_clockwise(S.weather.x, S.weather.y, S.weather.radius, S.weather.thickness,
-                      S.weather.begin_angle, S.weather.end_angle,
-                      wind_normalized, 100, main_text_color)
+                    S.weather.begin_angle, S.weather.end_angle,
+                    wind_normalized, 100, wind_color)
 
         -- 風速テキスト
         write(S.weather.text.wind.x, S.weather.text.wind.y,
-              string.format("Wind       : %.1f m/s", weather.wind_speed), 14, main_text_color)
+            string.format("Wind       : %.1f m/s%s", weather.wind_speed, wind_status), 14, wind_color)
     end
 
     -- 最終更新時刻

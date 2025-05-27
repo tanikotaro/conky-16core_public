@@ -322,7 +322,7 @@ function fs_free(fs)
 end
 
 
-public_ip = ""     -- variable that will hold the IP adress     -- Todo git push 時に注意！
+public_ip = nil     -- variable that will hold the IP adress     -- Todo git push 時に注意！
 function get_public_ip() return public_ip end
 function set_public_ip(ip)
     if not ip then public_ip = "No Address"
