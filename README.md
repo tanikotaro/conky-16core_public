@@ -1,6 +1,7 @@
 # conky-16core
 
-![Screenshot from 2025-05-07 19-54-14](https://github.com/user-attachments/assets/9f312b26-b2fc-4325-bc51-d40fa102bb98)
+![image](https://github.com/user-attachments/assets/da23949d-d62b-41a2-8ece-7910d28586cc)
+
 
 cd ~/16core && conky -c .conkyrc
 これで立ち上げ可能（coなどのaliasに設定しておくと良い）
